@@ -1,0 +1,14 @@
+git
+.gitignore
+
+**/.venv
+**/__pycache__
+**/*.pyc
+
+reporter/reports
+api/.env
+reporter/.env
+
+.vscode
+.idea
+EOF
