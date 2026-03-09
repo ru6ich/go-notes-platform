@@ -24,3 +24,6 @@ reporter/reports/*.csv
 
 # mac/linux noise
 .DS_Store
+
+# generated reports
+reporter/reports/
