@@ -6,7 +6,7 @@
 
 ## Current stage
 
-На текущем этапе проект уже перенесён с Docker Compose в Kubernetes и полностью работает в локальном Minikube-кластере.
+На текущем этапе проект уже перенесён с Docker Compose в Kubernetes, получил CI в GitHub Actions, публикацию образов в GHCR и ручной deploy конкретного SHA в локальный кластер.
 
 ## What is already done
 
@@ -55,6 +55,42 @@
 - `Deployment + PVC` для reporter
 - проверка доступа через `kubectl port-forward svc/nginx 8081:80`
 
+### Kubernetes troubleshooting stage
+
+Завершено:
+
+- первый blind troubleshooting-сценарий
+- поломка selector у `Service api`
+- диагностика через `get`, `describe`, `logs`, `endpoints`, `labels`
+- восстановление корректного selector
+
+### CI stage
+
+Завершено:
+
+- первый GitHub Actions workflow
+- проверка Go API
+- проверка Python reporter
+- проверка Docker build для обоих сервисов
+- обновление setup actions до актуальных версий
+
+### Image delivery stage
+
+Завершено:
+
+- публикация Docker-образов в GHCR
+- теги `latest` и `<commit-sha>`
+- проверка появления packages в GitHub
+
+### Manual deploy by SHA stage
+
+Завершено:
+
+- rollout образов из GHCR в Kubernetes
+- ручное обновление `api` и `reporter`
+- проверка rollout status
+- фиксация SHA-образов в k8s-манифестах
+
 ## Implemented Kubernetes resources
 
 ### `k8s/00-namespace.yaml`
@@ -79,6 +115,7 @@
 - `Deployment api`
 - init container ожидания Postgres
 - readiness/liveness probes
+- image из GHCR по конкретному SHA
 
 ### `k8s/04-nginx.yaml`
 
@@ -93,6 +130,7 @@
 - `PVC reporter-reports`
 - `Deployment reporter`
 - init containers ожидания Postgres и nginx
+- image из GHCR по конкретному SHA
 
 ## What was verified manually
 
@@ -108,6 +146,9 @@
   - `latency.png`
   - `success_rate.png`
   - `stats.json`
+- образы успешно публикуются в GHCR
+- Kubernetes успешно тянет образы из GHCR
+- deploy по SHA завершает rollout
 
 ## First blind troubleshooting scenario
 
@@ -137,10 +178,17 @@
 - `nginx` -> `Running`
 - `reporter` -> `Running`
 
+Дополнительно:
+
+- CI workflow успешен
+- образы публикуются в GHCR
+- deploy по SHA работает вручную
+
 ## Next step
 
 Следующий этап:
 
 - дополнительные blind troubleshooting-сценарии в Kubernetes
-- полировка манифестов
-- подготовка CI/CD
+- усиление CI
+- валидация k8s-манифестов
+- возможные следующие шаги по CD без self-hosted runner

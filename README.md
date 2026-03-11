@@ -2,8 +2,7 @@
 
 Учебный DevOps/SRE-проект вокруг простого приложения для заметок.
 
-Проект начинался как контейнерный стенд на Docker Compose, а на текущем этапе уже перенесён в Kubernetes.  
-Цель проекта — пройти полный учебный путь от локального запуска контейнеров до оркестрации, диагностики и дальнейшей автоматизации через CI/CD.
+Проект начинался как контейнерный стенд на Docker Compose, а на текущем этапе уже перенесён в Kubernetes, получил CI в GitHub Actions, публикацию Docker-образов в GHCR и ручной deploy по SHA.
 
 ## Current status
 
@@ -16,7 +15,10 @@
 - Dockerfile для API и reporter
 - запуск стека через Docker Compose
 - перенос стека в Kubernetes
-- базовые troubleshooting-сценарии для Docker Compose и Kubernetes
+- blind troubleshooting-сценарии в Kubernetes
+- GitHub Actions CI
+- публикация образов в GHCR
+- ручной deploy конкретного SHA в Kubernetes
 
 ## Architecture
 
@@ -77,6 +79,7 @@ reporter Pod -> http://nginx/healthz
 │   ├── architecture.md
 │   ├── lab-notes.md
 │   ├── troubleshooting.md
+│   ├── cicd-notes.md
 │   └── cheatsheets/
 │       ├── kubernetes-cheatsheet.md
 │       └── docker-compose-cheatsheet.md
@@ -87,6 +90,9 @@ reporter Pod -> http://nginx/healthz
 │   ├── 03-api.yaml
 │   ├── 04-nginx.yaml
 │   └── 05-reporter.yaml
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── nginx/
 │   └── nginx.conf
 ├── reporter/
@@ -170,6 +176,53 @@ curl http://localhost:8081/healthz
 curl http://localhost:8081/notes
 ```
 
+## CI/CD status
+
+### CI
+
+В репозитории настроен GitHub Actions workflow, который:
+
+- запускается на `push`
+- запускается на `pull_request`
+- вручную запускается через `workflow_dispatch`
+
+Он проверяет:
+
+- Go API (`go test` и `go build`)
+- Python reporter
+- сборку Docker-образа API
+- сборку Docker-образа reporter
+
+### Image delivery
+
+После успешного CI workflow публикует Docker-образы в GHCR.
+
+Используются образы вида:
+
+- `ghcr.io/ru6ich/go-notes-api:latest`
+- `ghcr.io/ru6ich/go-notes-api:<commit-sha>`
+- `ghcr.io/ru6ich/go-notes-reporter:latest`
+- `ghcr.io/ru6ich/go-notes-reporter:<commit-sha>`
+
+### Manual deploy by SHA
+
+Для деплоя в Kubernetes используется ручной rollout по конкретному SHA.
+
+Пример:
+
+```bash
+kubectl -n go-notes-platform set image deployment/api \
+  api=ghcr.io/ru6ich/go-notes-api:<SHA>
+
+kubectl -n go-notes-platform set image deployment/reporter \
+  reporter=ghcr.io/ru6ich/go-notes-reporter:<SHA>
+
+kubectl -n go-notes-platform rollout status deployment/api
+kubectl -n go-notes-platform rollout status deployment/reporter
+```
+
+После проверки rollout SHA фиксируется в `k8s/03-api.yaml` и `k8s/05-reporter.yaml`, чтобы source of truth снова был в манифестах.
+
 ## Reporter outputs
 
 Reporter stores generated reports in `/app/reports`.
@@ -212,16 +265,21 @@ Completed:
 - nginx in Kubernetes
 - reporter in Kubernetes
 - first blind Kubernetes troubleshooting scenario
+- GitHub Actions CI
+- image publishing to GHCR
+- manual SHA-based deployment flow
 
 Next:
 
 - more Kubernetes troubleshooting scenarios
-- polish k8s manifests and documentation
-- CI/CD
+- validation of Kubernetes manifests in CI
+- linting and stronger checks
+- possible future deploy automation
 
 ## Notes
 
-This project is educational.  
+This project is educational.
+
 The main goal is not only to run the stack, but to understand:
 
 - container build and runtime separation
@@ -231,3 +289,4 @@ The main goal is not only to run the stack, but to understand:
 - persistent storage
 - healthchecks and probes
 - troubleshooting in Docker and Kubernetes
+- CI, image delivery and manual deploy flow

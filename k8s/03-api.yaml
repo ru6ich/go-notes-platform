@@ -35,7 +35,7 @@ spec:
             - until nc -z postgres 5432; do echo "waiting for postgres"; sleep 2; done
       containers:
         - name: api
-          image: go-notes-api:local
+          image: ghcr.io/ru6ich/go-notes-api:50f75cf6ebec8ed6244ab90e67176ec9b84f0efc
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

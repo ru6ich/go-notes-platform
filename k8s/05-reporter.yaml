@@ -40,7 +40,7 @@ spec:
             - until nc -z nginx 80; do echo "waiting for nginx"; sleep 2; done
       containers:
         - name: reporter
-          image: go-notes-reporter:local
+          image: ghcr.io/ru6ich/go-notes-reporter:50f75cf6ebec8ed6244ab90e67176ec9b84f0efc
           imagePullPolicy: IfNotPresent
           env:
             - name: TARGET_URL
