@@ -19,10 +19,10 @@ jobs:
         working-directory: api
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25.5"
           cache-dependency-path: api/go.sum
@@ -44,10 +44,10 @@ jobs:
         working-directory: reporter
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           cache: "pip"
@@ -69,7 +69,7 @@ jobs:
       - reporter-check
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Build API image
         run: docker build -t go-notes-api:ci -f Dockerfile.api .
