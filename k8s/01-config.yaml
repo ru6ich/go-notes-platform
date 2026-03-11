@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: go-notes-platform
+data:
+  APP_PORT: "8080"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "notesdb"
+  DB_USER: "notesuser"
+  TARGET_URL: "http://nginx/healthz"
+  CHECK_INTERVAL_SECONDS: "10"
+  REPORT_EVERY_N_CHECKS: "3"
+  RUN_MODE: "loop"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: go-notes-platform
+type: Opaque
+stringData:
+  DB_PASSWORD: "notessecret"

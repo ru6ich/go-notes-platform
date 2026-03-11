@@ -111,3 +111,125 @@ Health log показал:
 
 ### Вывод
 Приложение может быть рабочим, а контейнер — unhealthy, если неправильно настроен healthcheck.
+
+
+## Сценарий k8s-1: broken selector on `Service api`
+
+### Goal
+
+Научиться диагностировать ситуацию, когда Pod жив, а приложение не работает из-за неправильной связи между `Service` и Pod.
+
+### Failure
+
+У `Service api` selector был изменён с:
+
+```yaml
+selector:
+  app: api
+```
+
+на:
+
+```yaml
+selector:
+  app: api-broken
+```
+
+### Symptoms
+
+- `curl http://localhost:8081/healthz` перестаёт работать через nginx
+- `curl http://localhost:8081/notes` перестаёт работать
+- `api` Pod остаётся `Running`
+- `nginx` может стать `0/1` и начать рестартиться
+- `nginx` не может подключиться к upstream API
+
+### Diagnostic commands
+
+```bash
+kubectl -n go-notes-platform get pods
+kubectl -n go-notes-platform get svc
+kubectl -n go-notes-platform get endpoints
+kubectl -n go-notes-platform describe svc api
+kubectl -n go-notes-platform describe svc nginx
+kubectl -n go-notes-platform logs deploy/nginx --tail=50
+kubectl -n go-notes-platform logs deploy/api --tail=50
+kubectl -n go-notes-platform get pod --show-labels
+kubectl -n go-notes-platform get svc api -o yaml
+```
+
+### What to notice
+
+- `api` Pod жив и healthy
+- `Service api` существует
+- endpoints у `api` отсутствуют или не совпадают с ожидаемыми
+- selector у `Service api` не совпадает с label Pod’а
+- в логах nginx видны ошибки подключения к upstream
+
+Пример симптома в логах nginx:
+
+```text
+connect() failed (111: Connection refused) while connecting to upstream
+```
+
+### Root cause
+
+`Service api` не выбирает Pod API из-за неправильного selector.
+
+### Fix via patch
+
+```bash
+kubectl -n go-notes-platform patch service api   --type='merge'   -p '{"spec":{"selector":{"app":"api"}}}'
+```
+
+### Fix via manifest
+
+Открыть файл:
+
+```text
+k8s/03-api.yaml
+```
+
+Убедиться, что selector сервиса выглядит так:
+
+```yaml
+spec:
+  selector:
+    app: api
+```
+
+Потом применить заново:
+
+```bash
+kubectl apply -f k8s/03-api.yaml
+```
+
+### Validation after fix
+
+```bash
+kubectl -n go-notes-platform get endpoints api
+kubectl -n go-notes-platform get pods
+kubectl -n go-notes-platform port-forward svc/nginx 8081:80
+```
+
+In another terminal:
+
+```bash
+curl http://localhost:8081/healthz
+curl http://localhost:8081/notes
+```
+
+### Main lesson
+
+`Pod` и `Deployment` могут быть полностью живыми, но приложение всё равно не работает, если `Service` смотрит не на те labels.
+
+---
+
+## Notes
+
+Следующие полезные blind troubleshooting-сценарии для практики:
+
+- сломанный `TARGET_URL` у reporter
+- неправильный `DB_PASSWORD`
+- сломанный selector у `Service nginx`
+- удаление PVC и последствия для stateful сервиса
+- поломка readiness probe

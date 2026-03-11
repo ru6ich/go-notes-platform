@@ -1,22 +1,26 @@
-# Go Notes Platform
+# go-notes-platform
 
-Учебный DevOps/SRE-проект, в котором простой сервис заметок постепенно обрастает инфраструктурой: PostgreSQL, reverse proxy на nginx, контейнеризация, Docker Compose, а далее — Kubernetes, k8s troubleshooting и CI/CD.
+Учебный DevOps/SRE-проект вокруг простого приложения для заметок.
 
-## Текущее состояние проекта
+Проект начинался как контейнерный стенд на Docker Compose, а на текущем этапе уже перенесён в Kubernetes.  
+Цель проекта — пройти полный учебный путь от локального запуска контейнеров до оркестрации, диагностики и дальнейшей автоматизации через CI/CD.
 
-На текущем этапе в проекте уже реализованы:
+## Current status
+
+На текущем этапе реализованы:
 
 - Go API
 - PostgreSQL
 - nginx reverse proxy
 - Python reporter
 - Dockerfile для API и reporter
-- запуск всего стека через Docker Compose
-- healthcheck-зависимости между сервисами
+- запуск стека через Docker Compose
+- перенос стека в Kubernetes
+- базовые troubleshooting-сценарии для Docker Compose и Kubernetes
 
-## Архитектура
+## Architecture
 
-Текущая схема работы:
+### Docker Compose stage
 
 ```text
 client -> localhost:8081 -> nginx:80 -> api:8080 -> postgres:5432
@@ -25,250 +29,205 @@ client -> localhost:8081 -> nginx:80 -> api:8080 -> postgres:5432
                         reporter -> http://nginx/healthz
 ```
 
-- с хоста пользователь обращается на `localhost:8081`
-- внутри контейнера nginx слушает `80`
-- nginx проксирует запросы на `api:8080`
-- Go API работает на `8080`
-- PostgreSQL работает на `5432`
+### Kubernetes stage
 
-## Компоненты
+```text
+client -> kubectl port-forward svc/nginx 8081:80
+                    |
+                    v
+                Service/nginx
+                    |
+                    v
+                 Pod/nginx
+                    |
+                    v
+                 Service/api
+                    |
+                    v
+                  Pod/api
+                    |
+                    v
+               Service/postgres
+                    |
+                    v
+               Pod/postgres-0
 
-### Go API
-
-Основной backend-сервис приложения.
-
-Что делает:
-
-- отдает `GET /healthz`
-- отдает `GET /notes`
-- принимает `POST /notes`
-- работает с PostgreSQL
-
-### PostgreSQL
-
-База данных проекта.
-
-Используется для хранения:
-
-- заметок (`notes`)
-- результатов проверок reporter (`api_checks`)
-
-Инициализация выполняется через `db/init.sql`.
-
-### nginx
-
-Reverse proxy перед Go API.
-
-Что делает:
-
-- принимает внешний трафик на `localhost:8081`
-- слушает `80` внутри контейнера
-- проксирует запросы в `api:8080`
-
-### Python reporter
-
-Сервис технических проверок и генерации отчётов.
-
-Что делает:
-
-- периодически ходит в `http://nginx/healthz`
-- измеряет latency и success/fail
-- пишет результаты в PostgreSQL
-- сохраняет отчёты в `reporter/reports`
-
-## Артефакты reporter
-
-После работы reporter в каталоге `reporter/reports` могут появляться:
-
-- `summary.csv`
-- `latency.png`
-- `success_rate.png`
-- `stats.json`
-
-## Стек
-
-- Go
-- Python
-- PostgreSQL
-- nginx
-- Docker
-- Docker Compose
-
-Следующие этапы лабораторной:
-
-- Kubernetes
-- Kubernetes troubleshooting
-- CI/CD
-
-## Быстрый старт
-
-### 1. Клонировать репозиторий
-
-```bash
-git clone https://github.com/ru6ich/go-notes-platform.git
-cd go-notes-platform
+reporter Pod -> http://nginx/healthz
 ```
 
-### 2. Поднять проект
+## Kubernetes resources
 
-```bash
-docker compose up --build
-```
+Текущая k8s-архитектура разложена так:
 
-### 3. Проверить статус контейнеров
+- `postgres` -> `StatefulSet + Service + PVC`
+- `api` -> `Deployment + Service`
+- `nginx` -> `Deployment + Service`
+- `reporter` -> `Deployment + PVC`
+- общие env-переменные -> `ConfigMap`
+- пароль БД -> `Secret`
 
-```bash
-docker compose ps
-```
-
-## Проверка работы
-
-### Healthcheck через nginx
-
-```bash
-curl http://localhost:8081/healthz
-```
-
-Ожидаемый ответ:
-
-```json
-{"status":"ok"}
-```
-
-### Получить список заметок
-
-```bash
-curl http://localhost:8081/notes
-```
-
-### Создать заметку
-
-```bash
-curl -X POST http://localhost:8081/notes \
-  -H "Content-Type: application/json" \
-  -d '{"text":"first note"}'
-```
-
-## Сервисы Docker Compose
-
-### postgres
-
-- образ: `postgres:17`
-- хранит данные приложения
-- использует volume `postgres_data`
-- инициализируется через `db/init.sql`
-
-### api
-
-- собирается из `Dockerfile.api`
-- работает на внутреннем порту `8080`
-- зависит от `postgres`
-- имеет healthcheck по `http://localhost:8080/healthz`
-
-### nginx
-
-- использует образ `nginx:1.27`
-- зависит от готовности `api`
-- публикует порт `8081:80`
-- использует конфиг `nginx/nginx.conf`
-
-### reporter
-
-- собирается из `Dockerfile.reporter`
-- использует `TARGET_URL=http://nginx/healthz`
-- зависит от `postgres`, `api` и `nginx`
-- сохраняет артефакты в `reporter/reports`
-
-## Полезные команды
-
-### Все логи
-
-```bash
-docker compose logs -f
-```
-
-### Логи отдельных сервисов
-
-```bash
-docker compose logs -f postgres
-docker compose logs -f api
-docker compose logs -f nginx
-docker compose logs -f reporter
-```
-
-### Остановить проект
-
-```bash
-docker compose down
-```
-
-### Остановить проект с удалением volume
-
-```bash
-docker compose down -v
-```
-
-## Переменные окружения
-
-Пример доступных переменных есть в `.env.example`:
-
-- `APP_PORT`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USER`
-- `DB_PASSWORD`
-- `TARGET_URL`
-- `CHECK_INTERVAL_SECONDS`
-- `REPORT_EVERY_N_CHECKS`
-
-## Структура проекта
+## Repository structure
 
 ```text
 .
 ├── api/
-│   ├── cmd/
-│   └── internal/
 ├── db/
 │   └── init.sql
 ├── docs/
 │   ├── architecture.md
 │   ├── lab-notes.md
-│   └── troubleshooting.md
+│   ├── troubleshooting.md
+│   └── cheatsheets/
+│       ├── kubernetes-cheatsheet.md
+│       └── docker-compose-cheatsheet.md
+├── k8s/
+│   ├── 00-namespace.yaml
+│   ├── 01-config.yaml
+│   ├── 02-postgres.yaml
+│   ├── 03-api.yaml
+│   ├── 04-nginx.yaml
+│   └── 05-reporter.yaml
 ├── nginx/
 │   └── nginx.conf
 ├── reporter/
-│   ├── reporter.py
-│   ├── requirements.txt
-│   └── reports/
 ├── Dockerfile.api
 ├── Dockerfile.reporter
 ├── compose.yaml
 └── README.md
 ```
 
-## Что уже закрыто в лабораторной
+## Run with Docker Compose
 
-Уже завершены этапы:
+### Start
 
-- базовое приложение на Go
-- Python reporter
-- подключение PostgreSQL
+```bash
+docker compose up --build
+```
+
+### Check
+
+```bash
+docker compose ps
+docker compose logs -f
+curl http://localhost:8081/healthz
+curl http://localhost:8081/notes
+```
+
+### Stop
+
+```bash
+docker compose down
+```
+
+## Run with Kubernetes
+
+Ниже пример локального запуска через Minikube.
+
+### 1. Start Minikube
+
+```bash
+minikube start --driver=docker
+kubectl config current-context
+kubectl get nodes
+```
+
+### 2. Build local images inside Minikube
+
+```bash
+eval $(minikube -p minikube docker-env)
+
+docker build -t go-notes-api:local -f Dockerfile.api .
+docker build -t go-notes-reporter:local -f Dockerfile.reporter .
+```
+
+### 3. Apply manifests
+
+```bash
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/01-config.yaml
+kubectl apply -f k8s/02-postgres.yaml
+kubectl apply -f k8s/03-api.yaml
+kubectl apply -f k8s/04-nginx.yaml
+kubectl apply -f k8s/05-reporter.yaml
+```
+
+### 4. Check cluster objects
+
+```bash
+kubectl -n go-notes-platform get all,pvc
+```
+
+### 5. Access application
+
+```bash
+kubectl -n go-notes-platform port-forward svc/nginx 8081:80
+```
+
+In another terminal:
+
+```bash
+curl http://localhost:8081/healthz
+curl http://localhost:8081/notes
+```
+
+## Reporter outputs
+
+Reporter stores generated reports in `/app/reports`.
+
+Expected files:
+
+- `summary.csv`
+- `latency.png`
+- `success_rate.png`
+- `stats.json`
+
+Check them in Kubernetes:
+
+```bash
+kubectl -n go-notes-platform exec deploy/reporter -- ls -la /app/reports
+kubectl -n go-notes-platform exec deploy/reporter -- cat /app/reports/stats.json
+```
+
+## Useful Kubernetes commands
+
+```bash
+kubectl -n go-notes-platform get pods,svc,endpoints,pvc
+kubectl -n go-notes-platform describe pod <pod-name>
+kubectl -n go-notes-platform logs deploy/<deployment-name>
+kubectl -n go-notes-platform exec -it <pod-name> -- sh
+kubectl -n go-notes-platform port-forward svc/<service-name> 8081:80
+```
+
+## Progress by stages
+
+Completed:
+
+- Dockerfile for API and reporter
 - nginx reverse proxy
-- контейнеризация сервисов
-- запуск через Docker Compose
-- базовая отладка контейнерного стенда
+- Docker Compose orchestration
+- Compose troubleshooting
+- Kubernetes namespace/config/secret
+- PostgreSQL in Kubernetes
+- API in Kubernetes
+- nginx in Kubernetes
+- reporter in Kubernetes
+- first blind Kubernetes troubleshooting scenario
 
-## Что дальше
+Next:
 
-Следующий инфраструктурный этап — перенос текущего Compose-стека в Kubernetes:
+- more Kubernetes troubleshooting scenarios
+- polish k8s manifests and documentation
+- CI/CD
 
-- PostgreSQL
-- Go API
-- nginx
-- reporter
-- конфигурация
-- healthchecks
-- сетевое взаимодействие
+## Notes
 
-После этого можно переходить к k8s troubleshooting и затем к CI/CD.
+This project is educational.  
+The main goal is not only to run the stack, but to understand:
+
+- container build and runtime separation
+- service-to-service networking
+- reverse proxy behavior
+- stateful vs stateless workloads
+- persistent storage
+- healthchecks and probes
+- troubleshooting in Docker and Kubernetes
