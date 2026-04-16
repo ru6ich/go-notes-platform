@@ -1,16 +1,16 @@
 # go-notes-platform
 
-Учебный DevOps/SRE-проект вокруг простого приложения для заметок.
+Учебный Go / DevOps / SRE-проект вокруг простого сервиса заметок.
 
-Проект начинался как контейнерный стенд на Docker Compose, а на текущем этапе уже перенесён в Kubernetes, получил CI в GitHub Actions, публикацию Docker-образов в GHCR и ручной deploy по SHA.
+Проект начинался как локальный стенд на Docker Compose, а затем был перенесён в Kubernetes. В репозитории собраны backend на Go, PostgreSQL, `nginx` как reverse proxy, Python reporter, Kubernetes-манифесты, CI в GitHub Actions и публикация Docker-образов в GHCR.
 
-## Current status
+## Что реализовано
 
-На текущем этапе реализованы:
+На текущем этапе в проекте есть:
 
 - Go API
 - PostgreSQL
-- nginx reverse proxy
+- `nginx` reverse proxy
 - Python reporter
 - Dockerfile для API и reporter
 - запуск стека через Docker Compose
@@ -20,9 +20,9 @@
 - публикация образов в GHCR
 - ручной deploy конкретного SHA в Kubernetes
 
-## Architecture
+## Архитектура
 
-### Docker Compose stage
+### Этап Docker Compose
 
 ```text
 client -> localhost:8081 -> nginx:80 -> api:8080 -> postgres:5432
@@ -31,13 +31,13 @@ client -> localhost:8081 -> nginx:80 -> api:8080 -> postgres:5432
                         reporter -> http://nginx/healthz
 ```
 
-### Kubernetes stage
+### Этап Kubernetes
 
 ```text
 client -> kubectl port-forward svc/nginx 8081:80
                     |
                     v
-                Service/nginx
+               Service/nginx
                     |
                     v
                  Pod/nginx
@@ -49,7 +49,7 @@ client -> kubectl port-forward svc/nginx 8081:80
                   Pod/api
                     |
                     v
-               Service/postgres
+              Service/postgres
                     |
                     v
                Pod/postgres-0
@@ -57,9 +57,9 @@ client -> kubectl port-forward svc/nginx 8081:80
 reporter Pod -> http://nginx/healthz
 ```
 
-## Kubernetes resources
+## Kubernetes-ресурсы
 
-Текущая k8s-архитектура разложена так:
+Текущая архитектура в Kubernetes разложена так:
 
 - `postgres` -> `StatefulSet + Service + PVC`
 - `api` -> `Deployment + Service`
@@ -68,10 +68,13 @@ reporter Pod -> http://nginx/healthz
 - общие env-переменные -> `ConfigMap`
 - пароль БД -> `Secret`
 
-## Repository structure
+## Структура репозитория
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── api/
 ├── db/
 │   └── init.sql
@@ -90,27 +93,27 @@ reporter Pod -> http://nginx/healthz
 │   ├── 03-api.yaml
 │   ├── 04-nginx.yaml
 │   └── 05-reporter.yaml
-├── .github/
-│   └── workflows/
-│       └── ci.yml
 ├── nginx/
 │   └── nginx.conf
 ├── reporter/
+├── .dockerignore
+├── .env.example
+├── .gitignore
 ├── Dockerfile.api
 ├── Dockerfile.reporter
 ├── compose.yaml
 └── README.md
 ```
 
-## Run with Docker Compose
+## Быстрый старт через Docker Compose
 
-### Start
+### Запуск
 
 ```bash
 docker compose up --build
 ```
 
-### Check
+### Проверка
 
 ```bash
 docker compose ps
@@ -119,17 +122,17 @@ curl http://localhost:8081/healthz
 curl http://localhost:8081/notes
 ```
 
-### Stop
+### Остановка
 
 ```bash
 docker compose down
 ```
 
-## Run with Kubernetes
+## Запуск в Kubernetes
 
 Ниже пример локального запуска через Minikube.
 
-### 1. Start Minikube
+### 1. Запустить Minikube
 
 ```bash
 minikube start --driver=docker
@@ -137,7 +140,7 @@ kubectl config current-context
 kubectl get nodes
 ```
 
-### 2. Build local images inside Minikube
+### 2. Собрать локальные образы внутри Minikube
 
 ```bash
 eval $(minikube -p minikube docker-env)
@@ -146,7 +149,7 @@ docker build -t go-notes-api:local -f Dockerfile.api .
 docker build -t go-notes-reporter:local -f Dockerfile.reporter .
 ```
 
-### 3. Apply manifests
+### 3. Применить манифесты
 
 ```bash
 kubectl apply -f k8s/00-namespace.yaml
@@ -157,26 +160,26 @@ kubectl apply -f k8s/04-nginx.yaml
 kubectl apply -f k8s/05-reporter.yaml
 ```
 
-### 4. Check cluster objects
+### 4. Проверить объекты в кластере
 
 ```bash
 kubectl -n go-notes-platform get all,pvc
 ```
 
-### 5. Access application
+### 5. Открыть приложение
 
 ```bash
 kubectl -n go-notes-platform port-forward svc/nginx 8081:80
 ```
 
-In another terminal:
+В другом терминале:
 
 ```bash
 curl http://localhost:8081/healthz
 curl http://localhost:8081/notes
 ```
 
-## CI/CD status
+## CI/CD
 
 ### CI
 
@@ -186,14 +189,14 @@ curl http://localhost:8081/notes
 - запускается на `pull_request`
 - вручную запускается через `workflow_dispatch`
 
-Он проверяет:
+Workflow проверяет:
 
 - Go API (`go test` и `go build`)
 - Python reporter
 - сборку Docker-образа API
 - сборку Docker-образа reporter
 
-### Image delivery
+### Публикация образов
 
 После успешного CI workflow публикует Docker-образы в GHCR.
 
@@ -204,7 +207,7 @@ curl http://localhost:8081/notes
 - `ghcr.io/ru6ich/go-notes-reporter:latest`
 - `ghcr.io/ru6ich/go-notes-reporter:<commit-sha>`
 
-### Manual deploy by SHA
+### Ручной deploy по SHA
 
 Для деплоя в Kubernetes используется ручной rollout по конкретному SHA.
 
@@ -221,27 +224,27 @@ kubectl -n go-notes-platform rollout status deployment/api
 kubectl -n go-notes-platform rollout status deployment/reporter
 ```
 
-После проверки rollout SHA фиксируется в `k8s/03-api.yaml` и `k8s/05-reporter.yaml`, чтобы source of truth снова был в манифестах.
+После успешного rollout используемый SHA фиксируется в `k8s/03-api.yaml` и `k8s/05-reporter.yaml`, чтобы source of truth снова оставался в манифестах.
 
 ## Reporter outputs
 
-Reporter stores generated reports in `/app/reports`.
+Reporter сохраняет отчёты в `/app/reports`.
 
-Expected files:
+Ожидаемые файлы:
 
 - `summary.csv`
 - `latency.png`
 - `success_rate.png`
 - `stats.json`
 
-Check them in Kubernetes:
+Проверка в Kubernetes:
 
 ```bash
 kubectl -n go-notes-platform exec deploy/reporter -- ls -la /app/reports
 kubectl -n go-notes-platform exec deploy/reporter -- cat /app/reports/stats.json
 ```
 
-## Useful Kubernetes commands
+## Полезные команды Kubernetes
 
 ```bash
 kubectl -n go-notes-platform get pods,svc,endpoints,pvc
@@ -251,42 +254,44 @@ kubectl -n go-notes-platform exec -it <pod-name> -- sh
 kubectl -n go-notes-platform port-forward svc/<service-name> 8081:80
 ```
 
-## Progress by stages
+## Прогресс по этапам
 
-Completed:
+### Уже сделано
 
-- Dockerfile for API and reporter
-- nginx reverse proxy
-- Docker Compose orchestration
-- Compose troubleshooting
-- Kubernetes namespace/config/secret
-- PostgreSQL in Kubernetes
-- API in Kubernetes
-- nginx in Kubernetes
-- reporter in Kubernetes
-- first blind Kubernetes troubleshooting scenario
+- Dockerfile для API и reporter
+- `nginx` reverse proxy
+- orchestration через Docker Compose
+- troubleshooting в Compose
+- Kubernetes namespace / config / secret
+- PostgreSQL в Kubernetes
+- API в Kubernetes
+- `nginx` в Kubernetes
+- reporter в Kubernetes
+- первый blind troubleshooting-сценарий в Kubernetes
 - GitHub Actions CI
-- image publishing to GHCR
-- manual SHA-based deployment flow
+- публикация образов в GHCR
+- ручной deploy по SHA
 
-Next:
+### Что можно развивать дальше
 
-- more Kubernetes troubleshooting scenarios
-- validation of Kubernetes manifests in CI
-- linting and stronger checks
-- possible future deploy automation
+- новые Kubernetes troubleshooting-сценарии
+- валидация Kubernetes-манифестов в CI
+- linting и более строгие проверки
+- частичная или полная автоматизация deploy
 
-## Notes
+## Что показывает этот проект
 
-This project is educational.
+Главная цель проекта — не просто поднять стек, а на практике разобраться в том, как работают:
 
-The main goal is not only to run the stack, but to understand:
-
-- container build and runtime separation
-- service-to-service networking
-- reverse proxy behavior
-- stateful vs stateless workloads
+- сборка и запуск контейнеров
+- сетевое взаимодействие между сервисами
+- reverse proxy
+- stateful и stateless workloads
 - persistent storage
-- healthchecks and probes
-- troubleshooting in Docker and Kubernetes
-- CI, image delivery and manual deploy flow
+- healthchecks и probes
+- troubleshooting в Docker и Kubernetes
+- CI, доставка образов и ручной deploy flow
+
+## Примечание
+
+Проект учебный. Он используется как практический стенд для отработки навыков Go backend, контейнеризации, Kubernetes, CI/CD и troubleshooting.
